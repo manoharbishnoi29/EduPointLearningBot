@@ -1,4 +1,5 @@
 import os
+import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
@@ -12,9 +13,9 @@ from telegram.ext import (
     filters,
 )
 
-# =========================
+# =========================================================
 # SETTINGS
-# =========================
+# =========================================================
 
 TOKEN = os.getenv("BOT_TOKEN")
 PORT = int(os.getenv("PORT", "10000"))
@@ -22,68 +23,100 @@ PORT = int(os.getenv("PORT", "10000"))
 # Tumhara Telegram User ID
 ADMIN_ID = 6775287183
 
+DATA_FILE = "content.json"
 
-# =========================
+
+# =========================================================
+# DATA
+# =========================================================
+
+def load_content():
+    if not os.path.exists(DATA_FILE):
+        return []
+
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_content(content):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(content, f, ensure_ascii=False, indent=2)
+
+
+content_list = load_content()
+
+
+# =========================================================
 # RENDER WEB SERVER
-# =========================
+# =========================================================
 
 class HealthHandler(BaseHTTPRequestHandler):
+
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/plain")
         self.end_headers()
-        self.wfile.write(b"EduPoint Learning Bot is running!")
+        self.wfile.write(
+            b"EduPoint Learning Bot is running!"
+        )
 
     def log_message(self, format, *args):
         pass
 
 
 def start_web_server():
-    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    server = HTTPServer(
+        ("0.0.0.0", PORT),
+        HealthHandler
+    )
     server.serve_forever()
 
 
-# =========================
-# START COMMAND
-# =========================
+# =========================================================
+# MAIN MENU
+# =========================================================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def main_menu(user_id):
 
     keyboard = [
         [
             InlineKeyboardButton(
                 "📚 Study Material",
                 callback_data="study"
-            ),
+            )
+        ],
+        [
             InlineKeyboardButton(
                 "🎥 Videos",
                 callback_data="videos"
             ),
-        ],
-        [
             InlineKeyboardButton(
                 "📝 Notes",
                 callback_data="notes"
-            ),
+            )
+        ],
+        [
             InlineKeyboardButton(
                 "🖼️ Photos",
                 callback_data="photos"
             ),
-        ],
-        [
             InlineKeyboardButton(
                 "❓ Quiz",
                 callback_data="quiz"
-            ),
+            )
+        ],
+        [
             InlineKeyboardButton(
                 "ℹ️ About",
                 callback_data="about"
-            ),
+            )
         ],
     ]
 
-    # Admin ke liye extra button
-    if update.effective_user.id == ADMIN_ID:
+    if user_id == ADMIN_ID:
         keyboard.append([
             InlineKeyboardButton(
                 "🔐 Admin Panel",
@@ -91,367 +124,626 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
         ])
 
-    reply_markup = InlineKeyboardMarkup(keyboard)
+    return InlineKeyboardMarkup(keyboard)
+
+
+# =========================================================
+# START
+# =========================================================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    context.user_data.clear()
 
     await update.message.reply_text(
         "🎓 Welcome to EduPoint Learning Bot!\n\n"
         "📚 Educational videos, notes, photos aur "
         "study material yahan milega.\n\n"
         "👇 Neeche se option choose karo:",
-        reply_markup=reply_markup,
+        reply_markup=main_menu(
+            update.effective_user.id
+        )
     )
 
 
-# =========================
-# BUTTON HANDLER
-# =========================
+# =========================================================
+# STUDY MATERIAL
+# =========================================================
 
-async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def show_study(update, context):
 
     query = update.callback_query
     await query.answer()
 
-    data = query.data
-
-    # -------------------------
-    # STUDY MATERIAL
-    # -------------------------
-
-    if data == "study":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🎥 Videos",
-                    callback_data="videos"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📝 Notes",
-                    callback_data="notes"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ],
-        ]
-
-        await query.edit_message_text(
-            "📚 Study Material\n\n"
-            "Yahan educational study material milega.\n\n"
-            "👇 Category choose karo:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # VIDEOS
-    # -------------------------
-
-    elif data == "videos":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ]
-        ]
-
-        await query.edit_message_text(
-            "🎥 Educational Videos\n\n"
-            "Abhi videos add nahi kiye gaye hain.\n\n"
-            "Jaldi hi yahan educational videos "
-            "available honge. 📚",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # NOTES
-    # -------------------------
-
-    elif data == "notes":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ]
-        ]
-
-        await query.edit_message_text(
-            "📝 Notes\n\n"
-            "Abhi notes add nahi kiye gaye hain.\n\n"
-            "Jaldi hi study notes available honge. 📖",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # PHOTOS
-    # -------------------------
-
-    elif data == "photos":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ]
-        ]
-
-        await query.edit_message_text(
-            "🖼️ Educational Photos\n\n"
-            "Educational images yahan add ki jayengi.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # QUIZ
-    # -------------------------
-
-    elif data == "quiz":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ]
-        ]
-
-        await query.edit_message_text(
-            "❓ Quiz\n\n"
-            "Quiz system jaldi add kiya jayega. 🧠",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # ABOUT
-    # -------------------------
-
-    elif data == "about":
-
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ]
-        ]
-
-        await query.edit_message_text(
-            "🎓 EduPoint Learning Bot\n\n"
-            "Educational content ke liye banaya gaya hai.\n\n"
-            "📚 Study Material\n"
-            "🎥 Educational Videos\n"
-            "📝 Notes\n"
-            "🖼️ Educational Photos\n"
-            "❓ Quiz",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
-
-    # -------------------------
-    # ADMIN PANEL
-    # -------------------------
-
-    elif data == "admin":
-
-        if query.from_user.id != ADMIN_ID:
-            await query.edit_message_text(
-                "⛔ Access denied."
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "🎥 Videos",
+                callback_data="videos"
             )
-            return
+        ],
+        [
+            InlineKeyboardButton(
+                "📝 Notes / PDFs",
+                callback_data="notes"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🖼️ Photos",
+                callback_data="photos"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔙 Main Menu",
+                callback_data="home"
+            )
+        ],
+    ]
 
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "🎥 Add Video",
-                    callback_data="add_video"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🖼️ Add Photo",
-                    callback_data="add_photo"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "📝 Add Note",
-                    callback_data="add_note"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "🔙 Main Menu",
-                    callback_data="home"
-                )
-            ],
-        ]
+    await query.edit_message_text(
+        "📚 Study Material\n\n"
+        "Apni category choose karo:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-        await query.edit_message_text(
-            "🔐 Admin Panel\n\n"
-            "Yahan se tum educational content manage kar sakte ho.\n\n"
-            "👇 Option choose karo:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
 
-    # -------------------------
-    # ADD VIDEO
-    # -------------------------
+# =========================================================
+# SHOW CONTENT
+# =========================================================
 
-    elif data == "add_video":
+async def show_content(update, context, content_type):
 
-        if query.from_user.id != ADMIN_ID:
-            return
+    query = update.callback_query
+    await query.answer()
 
-        await query.edit_message_text(
-            "🎥 Add Video\n\n"
-            "Is feature ko next update mein connect karenge.\n\n"
-            "Uske baad tum Telegram se directly "
-            "video upload kar sakoge."
-        )
+    items = [
+        item for item in content_list
+        if item["type"] == content_type
+    ]
 
-    # -------------------------
-    # ADD PHOTO
-    # -------------------------
+    if not items:
 
-    elif data == "add_photo":
+        keyboard = [[
+            InlineKeyboardButton(
+                "🔙 Main Menu",
+                callback_data="home"
+            )
+        ]]
 
-        if query.from_user.id != ADMIN_ID:
-            return
+        names = {
+            "video": "🎥 Videos",
+            "document": "📝 Notes / PDFs",
+            "photo": "🖼️ Photos",
+        }
 
         await query.edit_message_text(
-            "🖼️ Add Photo\n\n"
-            "Is feature ko next update mein connect karenge."
+            f"{names[content_type]}\n\n"
+            "Abhi yahan koi content available nahi hai.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    keyboard = []
+
+    for item in items:
+        keyboard.append([
+            InlineKeyboardButton(
+                item["title"],
+                callback_data=f"open_{item['id']}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            "🔙 Main Menu",
+            callback_data="home"
+        )
+    ])
+
+    names = {
+        "video": "🎥 Videos",
+        "document": "📝 Notes / PDFs",
+        "photo": "🖼️ Photos",
+    }
+
+    await query.edit_message_text(
+        f"{names[content_type]}\n\n"
+        "Content choose karo:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# =========================================================
+# OPEN CONTENT
+# =========================================================
+
+async def open_content(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        item_id = int(
+            query.data.replace("open_", "")
+        )
+    except ValueError:
+        return
+
+    item = next(
+        (
+            x for x in content_list
+            if x["id"] == item_id
+        ),
+        None
+    )
+
+    if not item:
+        await query.message.reply_text(
+            "❌ Content nahi mila."
+        )
+        return
+
+    caption = (
+        f"🎓 {item['title']}\n\n"
+        "📚 EduPoint Learning Bot"
+    )
+
+    if item["type"] == "video":
+
+        await query.message.reply_video(
+            video=item["file_id"],
+            caption=caption
         )
 
-    # -------------------------
-    # ADD NOTE
-    # -------------------------
+    elif item["type"] == "photo":
 
-    elif data == "add_note":
+        await query.message.reply_photo(
+            photo=item["file_id"],
+            caption=caption
+        )
 
-        if query.from_user.id != ADMIN_ID:
-            return
+    elif item["type"] == "document":
+
+        await query.message.reply_document(
+            document=item["file_id"],
+            caption=caption
+        )
+
+
+# =========================================================
+# ADMIN PANEL
+# =========================================================
+
+async def show_admin(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        await query.edit_message_text(
+            "⛔ Access denied."
+        )
+        return
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "🎥 Add Video",
+                callback_data="add_video"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🖼️ Add Photo",
+                callback_data="add_photo"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📄 Add PDF / Note",
+                callback_data="add_document"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🗑️ Delete Content",
+                callback_data="delete_content"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "📊 Content Count",
+                callback_data="content_count"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🔙 Main Menu",
+                callback_data="home"
+            )
+        ],
+    ]
+
+    await query.edit_message_text(
+        "🔐 Admin Panel\n\n"
+        "Yahan se tum Telegram se directly "
+        "educational content add kar sakte ho.\n\n"
+        "👇 Option choose karo:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# =========================================================
+# ADD CONTENT - START
+# =========================================================
+
+async def start_add_video(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    context.user_data["admin_action"] = "video"
+
+    await query.edit_message_text(
+        "🎥 Add Video\n\n"
+        "Ab mujhe ek educational video bhejo.\n\n"
+        "Video receive hone ke baad main uska title puchunga."
+    )
+
+
+async def start_add_photo(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    context.user_data["admin_action"] = "photo"
+
+    await query.edit_message_text(
+        "🖼️ Add Photo\n\n"
+        "Ab mujhe educational photo bhejo."
+    )
+
+
+async def start_add_document(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    context.user_data["admin_action"] = "document"
+
+    await query.edit_message_text(
+        "📄 Add PDF / Note\n\n"
+        "Ab mujhe PDF ya document bhejo."
+    )
+
+
+# =========================================================
+# RECEIVE VIDEO / PHOTO / DOCUMENT
+# =========================================================
+
+async def receive_media(update, context):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    action = context.user_data.get("admin_action")
+
+    if not action:
+        return
+
+    file_id = None
+    media_type = None
+
+    if action == "video" and update.message.video:
+
+        file_id = update.message.video.file_id
+        media_type = "video"
+
+    elif action == "photo" and update.message.photo:
+
+        file_id = update.message.photo[-1].file_id
+        media_type = "photo"
+
+    elif action == "document" and update.message.document:
+
+        file_id = update.message.document.file_id
+        media_type = "document"
+
+    else:
+        await update.message.reply_text(
+            "⚠️ Please wahi file type bhejo "
+            "jo tumne select ki hai."
+        )
+        return
+
+    context.user_data["pending_file_id"] = file_id
+    context.user_data["pending_type"] = media_type
+    context.user_data["admin_action"] = "title"
+
+    await update.message.reply_text(
+        "✅ File receive ho gayi!\n\n"
+        "Ab iska **title** bhejo.\n\n"
+        "Example:\n"
+        "Biology Chapter 1"
+    )
+
+
+# =========================================================
+# SAVE TITLE
+# =========================================================
+
+async def receive_title(update, context):
+
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if context.user_data.get("admin_action") != "title":
+        return
+
+    title = update.message.text.strip()
+
+    if not title:
+        await update.message.reply_text(
+            "❌ Title khali nahi ho sakta."
+        )
+        return
+
+    file_id = context.user_data.get(
+        "pending_file_id"
+    )
+
+    media_type = context.user_data.get(
+        "pending_type"
+    )
+
+    if not file_id or not media_type:
+        await update.message.reply_text(
+            "❌ File information nahi mili. "
+            "Dobara Add Content karo."
+        )
+        context.user_data.clear()
+        return
+
+    new_id = (
+        max(
+            [x["id"] for x in content_list],
+            default=0
+        )
+        + 1
+    )
+
+    item = {
+        "id": new_id,
+        "type": media_type,
+        "title": title,
+        "file_id": file_id,
+    }
+
+    content_list.append(item)
+    save_content(content_list)
+
+    context.user_data.clear()
+
+    await update.message.reply_text(
+        "✅ Content successfully save ho gaya! 🎉\n\n"
+        f"📌 Title: {title}\n"
+        f"📁 Type: {media_type}\n\n"
+        "Ab ye students ko menu mein dikhai dega.",
+        reply_markup=main_menu(ADMIN_ID)
+    )
+
+
+# =========================================================
+# DELETE CONTENT
+# =========================================================
+
+async def show_delete_content(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    if not content_list:
 
         await query.edit_message_text(
-            "📝 Add Note\n\n"
-            "Is feature ko next update mein connect karenge."
+            "🗑️ Delete Content\n\n"
+            "Abhi koi content available nahi hai."
         )
+        return
 
-    # -------------------------
-    # HOME
-    # -------------------------
+    keyboard = []
 
-    elif data == "home":
+    for item in content_list:
 
-        keyboard = [
+        keyboard.append([
+            InlineKeyboardButton(
+                f"🗑️ {item['title']}",
+                callback_data=f"delete_{item['id']}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            "🔙 Admin Panel",
+            callback_data="admin"
+        )
+    ])
+
+    await query.edit_message_text(
+        "🗑️ Delete Content\n\n"
+        "Jis content ko delete karna hai "
+        "uspar tap karo:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def delete_content(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    try:
+        item_id = int(
+            query.data.replace("delete_", "")
+        )
+    except ValueError:
+        return
+
+    global content_list
+
+    old_length = len(content_list)
+
+    content_list = [
+        x for x in content_list
+        if x["id"] != item_id
+    ]
+
+    if len(content_list) == old_length:
+
+        await query.edit_message_text(
+            "❌ Content nahi mila."
+        )
+        return
+
+    save_content(content_list)
+
+    await query.edit_message_text(
+        "✅ Content delete ho gaya.",
+        reply_markup=InlineKeyboardMarkup([
             [
                 InlineKeyboardButton(
-                    "📚 Study Material",
-                    callback_data="study"
-                ),
-                InlineKeyboardButton(
-                    "🎥 Videos",
-                    callback_data="videos"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "📝 Notes",
-                    callback_data="notes"
-                ),
-                InlineKeyboardButton(
-                    "🖼️ Photos",
-                    callback_data="photos"
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    "❓ Quiz",
-                    callback_data="quiz"
-                ),
-                InlineKeyboardButton(
-                    "ℹ️ About",
-                    callback_data="about"
-                ),
-            ],
-        ]
-
-        if query.from_user.id == ADMIN_ID:
-            keyboard.append([
-                InlineKeyboardButton(
-                    "🔐 Admin Panel",
+                    "🔙 Admin Panel",
                     callback_data="admin"
                 )
-            ])
-
-        await query.edit_message_text(
-            "🎓 EduPoint Learning Bot\n\n"
-            "👇 Option choose karo:",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-        )
+            ]
+        ])
+    )
 
 
-# =========================
+# =========================================================
+# CONTENT COUNT
+# =========================================================
+
+async def content_count(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    videos = sum(
+        1 for x in content_list
+        if x["type"] == "video"
+    )
+
+    photos = sum(
+        1 for x in content_list
+        if x["type"] == "photo"
+    )
+
+    documents = sum(
+        1 for x in content_list
+        if x["type"] == "document"
+    )
+
+    await query.edit_message_text(
+        "📊 EduPoint Content\n\n"
+        f"🎥 Videos: {videos}\n"
+        f"🖼️ Photos: {photos}\n"
+        f"📄 Notes/PDFs: {documents}\n"
+        f"📚 Total: {len(content_list)}",
+        reply_markup=InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton(
+                    "🔙 Admin Panel",
+                    callback_data="admin"
+                )
+            ]
+        ])
+    )
+
+
+# =========================================================
 # AUTOMATIC REPLY
-# =========================
+# =========================================================
 
-async def automatic_reply(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
+async def automatic_reply(update, context):
 
     if not update.message or not update.message.text:
         return
 
-    message = update.message.text.lower().strip()
+    # Admin title mode ko pehle handle karo
+    if (
+        update.effective_user.id == ADMIN_ID
+        and context.user_data.get("admin_action")
+        == "title"
+    ):
+        await receive_title(update, context)
+        return
 
-    if message in ["hi", "hello", "hey", "hii"]:
+    text = update.message.text.lower().strip()
+
+    if text in ["hi", "hello", "hey", "hii", "namaste"]:
+
         await update.message.reply_text(
             "👋 Hello!\n\n"
-            "🎓 EduPoint Learning Bot mein welcome hai.\n"
-            "Educational content ke liye /start dabao."
+            "🎓 EduPoint Learning Bot mein welcome hai!\n\n"
+            "📚 Educational content ke liye /start dabao."
         )
 
-    elif "help" in message or "madad" in message:
+    elif "video" in text:
+
         await update.message.reply_text(
-            "🆘 Help\n\n"
-            "Educational content dekhne ke liye /start command use karo."
+            "🎥 Educational videos dekhne ke liye "
+            "/start dabao aur Videos select karo."
         )
 
-    elif "video" in message:
+    elif "note" in text or "pdf" in text:
+
         await update.message.reply_text(
-            "🎥 Educational Videos ke liye /start dabao "
-            "aur Videos option select karo."
+            "📝 Notes/PDFs ke liye /start dabao."
         )
 
-    elif "note" in message:
+    elif "photo" in text or "image" in text:
+
         await update.message.reply_text(
-            "📝 Notes ke liye /start dabao "
-            "aur Notes option select karo."
+            "🖼️ Educational photos ke liye "
+            "/start dabao."
         )
 
-    elif "study" in message or "padhai" in message:
+    elif "study" in text or "padhai" in text:
+
         await update.message.reply_text(
             "📚 Study Material ke liye /start dabao."
         )
 
+    elif "help" in text or "madad" in text:
+
+        await update.message.reply_text(
+            "🆘 Help\n\n"
+            "Educational content dekhne ke liye "
+            "/start use karo."
+        )
+
     else:
+
         await update.message.reply_text(
             "🤖 Message mil gaya!\n\n"
             "🎓 EduPoint mein educational content "
@@ -459,9 +751,116 @@ async def automatic_reply(
         )
 
 
-# =========================
+# =========================================================
+# CALLBACK ROUTER
+# =========================================================
+
+async def callback_router(update, context):
+
+    query = update.callback_query
+    data = query.data
+
+    if data == "home":
+        await query.answer()
+
+        context.user_data.clear()
+
+        await query.edit_message_text(
+            "🎓 EduPoint Learning Bot\n\n"
+            "👇 Option choose karo:",
+            reply_markup=main_menu(
+                query.from_user.id
+            )
+        )
+
+    elif data == "study":
+        await show_study(update, context)
+
+    elif data == "videos":
+        await show_content(
+            update,
+            context,
+            "video"
+        )
+
+    elif data == "notes":
+        await show_content(
+            update,
+            context,
+            "document"
+        )
+
+    elif data == "photos":
+        await show_content(
+            update,
+            context,
+            "photo"
+        )
+
+    elif data == "quiz":
+        await query.answer()
+
+        await query.edit_message_text(
+            "❓ Quiz\n\n"
+            "Quiz system next update mein add karenge.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔙 Main Menu",
+                        callback_data="home"
+                    )
+                ]
+            ])
+        )
+
+    elif data == "about":
+        await query.answer()
+
+        await query.edit_message_text(
+            "🎓 EduPoint Learning Bot\n\n"
+            "📚 Educational videos\n"
+            "📝 Notes & PDFs\n"
+            "🖼️ Educational photos\n"
+            "❓ Quiz\n\n"
+            "Learning made easier! 🚀",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔙 Main Menu",
+                        callback_data="home"
+                    )
+                ]
+            ])
+        )
+
+    elif data == "admin":
+        await show_admin(update, context)
+
+    elif data == "add_video":
+        await start_add_video(update, context)
+
+    elif data == "add_photo":
+        await start_add_photo(update, context)
+
+    elif data == "add_document":
+        await start_add_document(update, context)
+
+    elif data == "delete_content":
+        await show_delete_content(update, context)
+
+    elif data == "content_count":
+        await content_count(update, context)
+
+    elif data.startswith("open_"):
+        await open_content(update, context)
+
+    elif data.startswith("delete_"):
+        await delete_content(update, context)
+
+
+# =========================================================
 # MAIN
-# =========================
+# =========================================================
 
 def main():
 
@@ -470,23 +869,38 @@ def main():
             "BOT_TOKEN environment variable nahi mila!"
         )
 
-    # Render web server
+    # Render Web Service ke liye HTTP server
     threading.Thread(
         target=start_web_server,
         daemon=True
     ).start()
 
-    # Telegram bot
+    # Telegram application
     app = Application.builder().token(TOKEN).build()
 
+    # Commands
     app.add_handler(
         CommandHandler("start", start)
     )
 
+    # Buttons
     app.add_handler(
-        CallbackQueryHandler(button_handler)
+        CallbackQueryHandler(callback_router)
     )
 
+    # Videos / Photos / Documents
+    app.add_handler(
+        MessageHandler(
+            (
+                filters.VIDEO
+                | filters.PHOTO
+                | filters.Document.ALL
+            ),
+            receive_media
+        )
+    )
+
+    # Normal text messages
     app.add_handler(
         MessageHandler(
             filters.TEXT & ~filters.COMMAND,
@@ -498,6 +912,10 @@ def main():
 
     app.run_polling()
 
+
+# =========================================================
+# RUN
+# =========================================================
 
 if __name__ == "__main__":
     main()
