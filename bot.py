@@ -1,4 +1,7 @@
 import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application,
@@ -7,7 +10,26 @@ from telegram.ext import (
     ContextTypes,
 )
 
+
 TOKEN = os.getenv("BOT_TOKEN")
+PORT = int(os.getenv("PORT", "10000"))
+
+
+# Render Web Service के लिए छोटा HTTP server
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
+        self.end_headers()
+        self.wfile.write(b"EduPointLearningBot is running!")
+
+    def log_message(self, format, *args):
+        return
+
+
+def start_web_server():
+    server = HTTPServer(("0.0.0.0", PORT), HealthHandler)
+    server.serve_forever()
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -61,6 +83,10 @@ def main():
     if not TOKEN:
         raise ValueError("BOT_TOKEN environment variable नहीं मिला!")
 
+    # Render का port शुरू करो
+    threading.Thread(target=start_web_server, daemon=True).start()
+
+    # Telegram bot शुरू करो
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
