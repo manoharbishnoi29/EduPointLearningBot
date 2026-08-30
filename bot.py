@@ -26,7 +26,6 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 PORT = int(os.getenv("PORT", "10000"))
 
-# Tumhara Telegram ID
 ADMIN_ID = 6775287183
 
 
@@ -86,9 +85,9 @@ def start_web_server():
     server.serve_forever()
 
 
-# =========================
-# DATABASE
-# =========================
+# =========================================================
+# CONTENT DATABASE
+# =========================================================
 
 def get_content():
 
@@ -142,9 +141,88 @@ def get_metadata(item):
         return {}
 
 
-# =========================
+# =========================================================
+# QUIZ DATABASE
+# =========================================================
+
+def get_quiz_names():
+
+    result = (
+        supabase
+        .table("quizzes")
+        .select("quiz_name")
+        .order("quiz_name")
+        .execute()
+    )
+
+    names = []
+
+    for item in result.data or []:
+
+        name = item.get("quiz_name")
+
+        if name and name not in names:
+            names.append(name)
+
+    return names
+
+
+def get_quiz_questions(quiz_name):
+
+    result = (
+        supabase
+        .table("quizzes")
+        .select("*")
+        .eq("quiz_name", quiz_name)
+        .order("question_number", desc=False)
+        .execute()
+    )
+
+    return result.data or []
+
+
+def save_quiz_question(
+    quiz_name,
+    question,
+    option_a,
+    option_b,
+    option_c,
+    option_d,
+    correct_answer,
+    question_number
+):
+
+    return (
+        supabase
+        .table("quizzes")
+        .insert({
+            "quiz_name": quiz_name,
+            "question": question,
+            "option_a": option_a,
+            "option_b": option_b,
+            "option_c": option_c,
+            "option_d": option_d,
+            "correct_answer": correct_answer,
+            "question_number": question_number
+        })
+        .execute()
+    )
+
+
+def delete_quiz_question(question_id):
+
+    return (
+        supabase
+        .table("quizzes")
+        .delete()
+        .eq("id", question_id)
+        .execute()
+    )
+
+
+# =========================================================
 # MAIN MENU
-# =========================
+# =========================================================
 
 def main_menu(user_id):
 
@@ -186,6 +264,7 @@ def main_menu(user_id):
     ]
 
     if user_id == ADMIN_ID:
+
         buttons.append([
             InlineKeyboardButton(
                 "🔐 Admin Panel",
@@ -196,9 +275,9 @@ def main_menu(user_id):
     return InlineKeyboardMarkup(buttons)
 
 
-# =========================
+# =========================================================
 # START
-# =========================
+# =========================================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
@@ -215,9 +294,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# =========================
+# =========================================================
 # STUDY MATERIAL
-# =========================
+# =========================================================
 
 async def study_material(update, context):
 
@@ -258,9 +337,9 @@ async def study_material(update, context):
     )
 
 
-# =========================
+# =========================================================
 # SHOW CONTENT
-# =========================
+# =========================================================
 
 async def show_content(update, context, content_type):
 
@@ -342,9 +421,9 @@ async def show_content(update, context, content_type):
     )
 
 
-# =========================
+# =========================================================
 # OPEN CONTENT
-# =========================
+# =========================================================
 
 async def open_content(update, context):
 
@@ -420,9 +499,9 @@ async def open_content(update, context):
         )
 
 
-# =========================
+# =========================================================
 # ADMIN PANEL
-# =========================
+# =========================================================
 
 async def admin_panel(update, context):
 
@@ -458,6 +537,18 @@ async def admin_panel(update, context):
         ],
         [
             InlineKeyboardButton(
+                "❓ Add Quiz",
+                callback_data="add_quiz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "🗑️ Delete Quiz",
+                callback_data="delete_quiz"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 "🗑️ Delete Content",
                 callback_data="delete_content"
             )
@@ -483,9 +574,9 @@ async def admin_panel(update, context):
     )
 
 
-# =========================
+# =========================================================
 # ADD VIDEO
-# =========================
+# =========================================================
 
 async def add_video(update, context):
 
@@ -505,9 +596,9 @@ async def add_video(update, context):
     )
 
 
-# =========================
+# =========================================================
 # ADD PHOTO
-# =========================
+# =========================================================
 
 async def add_photo(update, context):
 
@@ -527,9 +618,9 @@ async def add_photo(update, context):
     )
 
 
-# =========================
+# =========================================================
 # ADD DOCUMENT
-# =========================
+# =========================================================
 
 async def add_document(update, context):
 
@@ -549,9 +640,9 @@ async def add_document(update, context):
     )
 
 
-# =========================
+# =========================================================
 # RECEIVE FILE
-# =========================
+# =========================================================
 
 async def receive_file(update, context):
 
@@ -619,9 +710,9 @@ async def receive_file(update, context):
     )
 
 
-# =========================
+# =========================================================
 # SAVE CONTENT
-# =========================
+# =========================================================
 
 async def save_title(update, context):
 
@@ -674,9 +765,617 @@ async def save_title(update, context):
         )
 
 
-# =========================
+# =========================================================
+# QUIZ USER MENU
+# =========================================================
+
+async def quiz_menu(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    try:
+
+        names = get_quiz_names()
+
+    except Exception as e:
+
+        print("QUIZ DATABASE ERROR:", e)
+
+        await query.edit_message_text(
+            "❌ Quiz database load nahi ho pa raha."
+        )
+
+        return
+
+    if not names:
+
+        await query.edit_message_text(
+            "❓ Quiz\n\n"
+            "Abhi koi quiz available nahi hai.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔙 Main Menu",
+                        callback_data="home"
+                    )
+                ]
+            ])
+        )
+
+        return
+
+    keyboard = []
+
+    for index, name in enumerate(names):
+
+        keyboard.append([
+            InlineKeyboardButton(
+                f"🧬 {name}",
+                callback_data=f"qselect_{index}"
+            )
+        ])
+
+    context.user_data["quiz_names"] = names
+
+    keyboard.append([
+        InlineKeyboardButton(
+            "🔙 Main Menu",
+            callback_data="home"
+        )
+    ])
+
+    await query.edit_message_text(
+        "❓ Quiz\n\n"
+        "Kiski quiz deni hai? 👇",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# =========================================================
+# START QUIZ
+# =========================================================
+
+async def start_quiz(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    try:
+
+        index = int(
+            query.data.replace(
+                "qselect_",
+                ""
+            )
+        )
+
+        names = context.user_data.get(
+            "quiz_names",
+            []
+        )
+
+        if index >= len(names):
+
+            await query.edit_message_text(
+                "❌ Quiz nahi mili."
+            )
+
+            return
+
+        quiz_name = names[index]
+
+        questions = get_quiz_questions(
+            quiz_name
+        )
+
+        if not questions:
+
+            await query.edit_message_text(
+                "❌ Is quiz mein questions nahi hain."
+            )
+
+            return
+
+        context.user_data["quiz_name"] = quiz_name
+        context.user_data["quiz_questions"] = questions
+        context.user_data["quiz_index"] = 0
+        context.user_data["quiz_score"] = 0
+
+        await send_quiz_question(
+            query.message,
+            context
+        )
+
+    except Exception as e:
+
+        print("START QUIZ ERROR:", e)
+
+        await query.edit_message_text(
+            "❌ Quiz start nahi ho paayi."
+        )
+
+
+# =========================================================
+# SEND QUESTION
+# =========================================================
+
+async def send_quiz_question(message, context):
+
+    questions = context.user_data.get(
+        "quiz_questions",
+        []
+    )
+
+    index = context.user_data.get(
+        "quiz_index",
+        0
+    )
+
+    if index >= len(questions):
+
+        score = context.user_data.get(
+            "quiz_score",
+            0
+        )
+
+        total = len(questions)
+
+        quiz_name = context.user_data.get(
+            "quiz_name",
+            "Quiz"
+        )
+
+        await message.reply_text(
+            "🎉 Quiz Complete!\n\n"
+            f"🧬 {quiz_name}\n"
+            f"🏆 Score: {score}/{total}\n\n"
+            "Great job! 👏",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔄 Quiz Menu",
+                        callback_data="quiz"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🏠 Main Menu",
+                        callback_data="home"
+                    )
+                ]
+            ])
+        )
+
+        return
+
+    question = questions[index]
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                f"A. {question['option_a']}",
+                callback_data="answer_A"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"B. {question['option_b']}",
+                callback_data="answer_B"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"C. {question['option_c']}",
+                callback_data="answer_C"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                f"D. {question['option_d']}",
+                callback_data="answer_D"
+            )
+        ]
+    ]
+
+    await message.reply_text(
+        f"❓ Question {index + 1}/{len(questions)}\n\n"
+        f"{question['question']}",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+# =========================================================
+# CHECK QUIZ ANSWER
+# =========================================================
+
+async def check_quiz_answer(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    questions = context.user_data.get(
+        "quiz_questions",
+        []
+    )
+
+    index = context.user_data.get(
+        "quiz_index",
+        0
+    )
+
+    if not questions or index >= len(questions):
+
+        await query.message.reply_text(
+            "❌ Quiz session khatam ho gayi."
+        )
+
+        return
+
+    selected = query.data.replace(
+        "answer_",
+        ""
+    ).upper()
+
+    question = questions[index]
+
+    correct = str(
+        question["correct_answer"]
+    ).strip().upper()
+
+    if selected == correct:
+
+        context.user_data["quiz_score"] = (
+            context.user_data.get(
+                "quiz_score",
+                0
+            ) + 1
+        )
+
+        result_text = "✅ Correct answer! 🎉"
+
+    else:
+
+        result_text = (
+            "❌ Wrong answer.\n"
+            f"Correct answer: {correct}"
+        )
+
+    await query.edit_message_text(
+        result_text
+    )
+
+    context.user_data["quiz_index"] = index + 1
+
+    await send_quiz_question(
+        query.message,
+        context
+    )
+
+
+# =========================================================
+# ADMIN ADD QUIZ
+# =========================================================
+
+async def add_quiz(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    context.user_data.clear()
+
+    context.user_data["action"] = "quiz_name"
+
+    await query.edit_message_text(
+        "❓ Add Quiz\n\n"
+        "Pehle quiz ka naam bhejo.\n\n"
+        "Example:\n"
+        "Biology 1"
+    )
+
+
+# =========================================================
+# ADMIN QUIZ TEXT FLOW
+# =========================================================
+
+async def handle_quiz_text(update, context):
+
+    if update.effective_user.id != ADMIN_ID:
+        return False
+
+    action = context.user_data.get(
+        "action"
+    )
+
+    if action not in [
+        "quiz_name",
+        "quiz_question",
+        "quiz_option_a",
+        "quiz_option_b",
+        "quiz_option_c",
+        "quiz_option_d",
+        "quiz_correct"
+    ]:
+        return False
+
+    text = update.message.text.strip()
+
+    if action == "quiz_name":
+
+        context.user_data["quiz_name"] = text
+        context.user_data["action"] = "quiz_question"
+
+        await update.message.reply_text(
+            "✅ Quiz name save ho gaya.\n\n"
+            "Ab Question 1 bhejo."
+        )
+
+        return True
+
+    if action == "quiz_question":
+
+        context.user_data["quiz_question"] = text
+        context.user_data["action"] = "quiz_option_a"
+
+        await update.message.reply_text(
+            "Ab option A bhejo."
+        )
+
+        return True
+
+    if action == "quiz_option_a":
+
+        context.user_data["quiz_option_a"] = text
+        context.user_data["action"] = "quiz_option_b"
+
+        await update.message.reply_text(
+            "Ab option B bhejo."
+        )
+
+        return True
+
+    if action == "quiz_option_b":
+
+        context.user_data["quiz_option_b"] = text
+        context.user_data["action"] = "quiz_option_c"
+
+        await update.message.reply_text(
+            "Ab option C bhejo."
+        )
+
+        return True
+
+    if action == "quiz_option_c":
+
+        context.user_data["quiz_option_c"] = text
+        context.user_data["action"] = "quiz_option_d"
+
+        await update.message.reply_text(
+            "Ab option D bhejo."
+        )
+
+        return True
+
+    if action == "quiz_option_d":
+
+        context.user_data["quiz_option_d"] = text
+        context.user_data["action"] = "quiz_correct"
+
+        await update.message.reply_text(
+            "Ab correct answer bhejo.\n\n"
+            "Sirf A, B, C ya D likho."
+        )
+
+        return True
+
+    if action == "quiz_correct":
+
+        correct = text.upper()
+
+        if correct not in [
+            "A",
+            "B",
+            "C",
+            "D"
+        ]:
+
+            await update.message.reply_text(
+                "⚠️ Sirf A, B, C ya D likho."
+            )
+
+            return True
+
+        quiz_name = context.user_data["quiz_name"]
+
+        existing = get_quiz_questions(
+            quiz_name
+        )
+
+        question_number = len(existing) + 1
+
+        try:
+
+            save_quiz_question(
+                quiz_name,
+                context.user_data["quiz_question"],
+                context.user_data["quiz_option_a"],
+                context.user_data["quiz_option_b"],
+                context.user_data["quiz_option_c"],
+                context.user_data["quiz_option_d"],
+                correct,
+                question_number
+            )
+
+            context.user_data.clear()
+
+            keyboard = [
+                [
+                    InlineKeyboardButton(
+                        "➕ Add Another Question",
+                        callback_data="add_quiz"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        "🔐 Admin Panel",
+                        callback_data="admin"
+                    )
+                ]
+            ]
+
+            await update.message.reply_text(
+                "✅ Question successfully save ho gaya! 🎉\n\n"
+                f"🧬 Quiz: {quiz_name}\n"
+                f"📝 Question: {question_number}\n"
+                f"✅ Correct answer: {correct}",
+                reply_markup=InlineKeyboardMarkup(
+                    keyboard
+                )
+            )
+
+        except Exception as e:
+
+            print("QUIZ SAVE ERROR:", e)
+
+            await update.message.reply_text(
+                "❌ Quiz database mein save nahi ho payi."
+            )
+
+        return True
+
+    return False
+
+
+# =========================================================
+# DELETE QUIZ MENU
+# =========================================================
+
+async def delete_quiz_menu(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    try:
+
+        result = (
+            supabase
+            .table("quizzes")
+            .select("*")
+            .order("quiz_name")
+            .order("question_number")
+            .execute()
+        )
+
+        questions = result.data or []
+
+    except Exception as e:
+
+        print("DELETE QUIZ ERROR:", e)
+
+        await query.edit_message_text(
+            "❌ Quiz database error."
+        )
+
+        return
+
+    if not questions:
+
+        await query.edit_message_text(
+            "🗑️ Quiz Delete\n\n"
+            "Abhi koi quiz nahi hai.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔙 Admin Panel",
+                        callback_data="admin"
+                    )
+                ]
+            ])
+        )
+
+        return
+
+    keyboard = []
+
+    for question in questions:
+
+        label = (
+            f"🗑️ {question['quiz_name']} - "
+            f"Q{question['question_number']}"
+        )
+
+        keyboard.append([
+            InlineKeyboardButton(
+                label,
+                callback_data=f"qdelete_{question['id']}"
+            )
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton(
+            "🔙 Admin Panel",
+            callback_data="admin"
+        )
+    ])
+
+    await query.edit_message_text(
+        "🗑️ Quiz Delete\n\n"
+        "Jis question ko delete karna hai tap karo:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+
+async def delete_quiz_item(update, context):
+
+    query = update.callback_query
+    await query.answer()
+
+    if query.from_user.id != ADMIN_ID:
+        return
+
+    try:
+
+        question_id = int(
+            query.data.replace(
+                "qdelete_",
+                ""
+            )
+        )
+
+        delete_quiz_question(
+            question_id
+        )
+
+        await query.edit_message_text(
+            "✅ Quiz question delete ho gaya.",
+            reply_markup=InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton(
+                        "🔙 Admin Panel",
+                        callback_data="admin"
+                    )
+                ]
+            ])
+        )
+
+    except Exception as e:
+
+        print("DELETE QUIZ ITEM ERROR:", e)
+
+        await query.edit_message_text(
+            "❌ Quiz question delete nahi ho paya."
+        )
+
+
+# =========================================================
 # DELETE CONTENT
-# =========================
+# =========================================================
 
 async def delete_menu(update, context):
 
@@ -784,9 +1483,9 @@ async def delete_item(update, context):
         )
 
 
-# =========================
+# =========================================================
 # CONTENT COUNT
-# =========================
+# =========================================================
 
 async def content_count(update, context):
 
@@ -819,12 +1518,22 @@ async def content_count(update, context):
             elif content_type == "document":
                 documents += 1
 
+        quiz_result = (
+            supabase
+            .table("quizzes")
+            .select("id", count="exact")
+            .execute()
+        )
+
+        quiz_count = quiz_result.count or 0
+
         await query.edit_message_text(
             "📊 Content Statistics\n\n"
             f"🎥 Videos: {videos}\n"
             f"🖼️ Photos: {photos}\n"
             f"📄 Notes/PDFs: {documents}\n"
-            f"📚 Total: {len(items)}",
+            f"❓ Quiz Questions: {quiz_count}\n"
+            f"📚 Total Content: {len(items)}",
             reply_markup=InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(
@@ -844,14 +1553,24 @@ async def content_count(update, context):
         )
 
 
-# =========================
+# =========================================================
 # AUTOMATIC REPLY
-# =========================
+# =========================================================
 
 async def automatic_reply(update, context):
 
     if not update.message:
         return
+
+    if update.effective_user.id == ADMIN_ID:
+
+        handled = await handle_quiz_text(
+            update,
+            context
+        )
+
+        if handled:
+            return
 
     if (
         update.effective_user.id == ADMIN_ID
@@ -909,9 +1628,9 @@ async def automatic_reply(update, context):
         )
 
 
-# =========================
+# =========================================================
 # CALLBACK ROUTER
-# =========================
+# =========================================================
 
 async def callback_router(update, context):
 
@@ -965,19 +1684,23 @@ async def callback_router(update, context):
 
     elif data == "quiz":
 
-        await query.answer()
+        await quiz_menu(
+            update,
+            context
+        )
 
-        await query.edit_message_text(
-            "❓ Quiz\n\n"
-            "Quiz feature baad mein add karenge.",
-            reply_markup=InlineKeyboardMarkup([
-                [
-                    InlineKeyboardButton(
-                        "🔙 Main Menu",
-                        callback_data="home"
-                    )
-                ]
-            ])
+    elif data.startswith("qselect_"):
+
+        await start_quiz(
+            update,
+            context
+        )
+
+    elif data.startswith("answer_"):
+
+        await check_quiz_answer(
+            update,
+            context
         )
 
     elif data == "about":
@@ -988,7 +1711,8 @@ async def callback_router(update, context):
             "🎓 EduPoint Learning Bot\n\n"
             "📚 Educational Videos\n"
             "📝 Notes & PDFs\n"
-            "🖼️ Educational Photos",
+            "🖼️ Educational Photos\n"
+            "❓ Interactive Quiz",
             reply_markup=InlineKeyboardMarkup([
                 [
                     InlineKeyboardButton(
@@ -1027,6 +1751,20 @@ async def callback_router(update, context):
             context
         )
 
+    elif data == "add_quiz":
+
+        await add_quiz(
+            update,
+            context
+        )
+
+    elif data == "delete_quiz":
+
+        await delete_quiz_menu(
+            update,
+            context
+        )
+
     elif data == "delete_content":
 
         await delete_menu(
@@ -1048,6 +1786,13 @@ async def callback_router(update, context):
             context
         )
 
+    elif data.startswith("qdelete_"):
+
+        await delete_quiz_item(
+            update,
+            context
+        )
+
     elif data.startswith("delete_"):
 
         await delete_item(
@@ -1056,9 +1801,9 @@ async def callback_router(update, context):
         )
 
 
-# =========================
+# =========================================================
 # MAIN
-# =========================
+# =========================================================
 
 def main():
 
